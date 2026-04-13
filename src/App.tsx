@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { parseXliff, buildXliff } from './utils/xliffParser';
-import { parseXlsx, buildXlsx } from './utils/xlsxParser';
+import { parseXlsx, buildXlsx, buildExcelForExport, parseExcelForBatchOverwrite } from './utils/xlsxParser';
 import type { TransUnit } from './utils/xliffParser';
 import { TranslationCard } from './components/TranslationCard';
-import { Download, Upload, Settings, Languages, Bot, Search } from 'lucide-react';
+import { Download, Upload, Settings, Languages, Bot, Search, FileSpreadsheet, FileUp } from 'lucide-react';
 import { generateAISuggestion } from './utils/aiTranslation';
 
 const defaultPrompt = `You are a translation engine. Translate the following text to exactly: {{targetLang}}.
@@ -40,10 +40,11 @@ export default function App() {
   const [draftSearchState, setDraftSearchState] = useState('All');
   const [draftSearchLengthRatio, setDraftSearchLengthRatio] = useState('All');
   const [draftSearchCustomRatio, setDraftSearchCustomRatio] = useState('1.5');
+  const [draftSearchNoChange, setDraftSearchNoChange] = useState(false);
 
   // Applied Filters
   const [appliedFilters, setAppliedFilters] = useState({
-    id: '', source: '', target: '', notSource: '', notTarget: '', state: 'All', lengthRatio: 'All', customRatio: '0'
+    id: '', source: '', target: '', notSource: '', notTarget: '', state: 'All', lengthRatio: 'All', customRatio: '0', noChange: false
   });
 
   // Batch state
@@ -83,6 +84,7 @@ export default function App() {
         setDraftSearchState('All');
         setDraftSearchLengthRatio('All');
         setDraftSearchCustomRatio('1.5');
+        setDraftSearchNoChange(false);
     }
 
     if (isXlsx) {
@@ -135,6 +137,17 @@ export default function App() {
     }
   };
 
+  const handleExportExcelFiltered = () => {
+    const buf = buildExcelForExport(filteredItems, updates);
+    const blob = new Blob([buf], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `translations_filtered_${targetLang}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleUpdate = (id: string, target: string, state: string) => {
     setUpdates(prev => ({ ...prev, [id]: { target, state } }));
   };
@@ -148,7 +161,8 @@ export default function App() {
       notTarget: draftSearchNotTarget,
       state: draftSearchState,
       lengthRatio: draftSearchLengthRatio,
-      customRatio: draftSearchLengthRatio === 'Custom' ? draftSearchCustomRatio : '0'
+      customRatio: draftSearchLengthRatio === 'Custom' ? draftSearchCustomRatio : '0',
+      noChange: draftSearchNoChange
     });
   };
 
@@ -173,6 +187,8 @@ export default function App() {
       
       if (appliedFilters.notSource && item.source.toLowerCase().includes(appliedFilters.notSource.toLowerCase())) return false;
       if (appliedFilters.notTarget && currentTarget.toLowerCase().includes(appliedFilters.notTarget.toLowerCase())) return false;
+      
+      if (appliedFilters.noChange && item.source !== currentTarget) return false;
       
       return true;
     });
@@ -208,6 +224,40 @@ export default function App() {
       newUpdates[id] = { target: currentTarget, state: batchState };
     });
     setUpdates(newUpdates);
+  };
+
+  const handleBatchOverwrite = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx';
+    input.onchange = (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const buf = evt.target?.result as ArrayBuffer;
+          const excelUpdates = parseExcelForBatchOverwrite(buf);
+          const newUpdates = { ...updates };
+          let matchedCount = 0;
+          
+          Object.entries(excelUpdates).forEach(([id, translation]) => {
+            const item = items.find(i => i.id === id);
+            if (item) {
+              newUpdates[id] = { target: translation, state: updates[id]?.state ?? item.state };
+              matchedCount++;
+            }
+          });
+          
+          setUpdates(newUpdates);
+          alert(`Successfully updated ${matchedCount} items via Excel.`);
+        } catch (err) {
+          alert("Failed to parse Excel file for overwrite");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    };
+    input.click();
   };
 
   const handleBatchAI = async () => {
@@ -265,9 +315,18 @@ export default function App() {
           <button 
             disabled={!uploadType}
             onClick={handleDownload}
-            className="disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded text-sm font-medium flex items-center gap-2 transition-colors"
+            className="disabled:opacity-50 disabled:cursor-not-allowed bg-slate-600 hover:bg-slate-700 text-white px-3 py-2 rounded text-sm font-medium flex items-center gap-2 transition-colors"
+            title="Download full file (XLIFF/XLSX)"
           >
             <Download size={16} /> Export
+          </button>
+          <button 
+            disabled={!uploadType}
+            onClick={handleExportExcelFiltered}
+            className="disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded text-sm font-medium flex items-center gap-2 transition-colors"
+            title="Export filtered results to Excel (with ID, 原文, 译文, 状态)"
+          >
+            <FileSpreadsheet size={16} /> 导出 Excel
           </button>
           <button 
             onClick={() => setShowSettings(true)}
@@ -394,7 +453,20 @@ export default function App() {
                         />
                       )}
                     </div>
-                 </label>
+                  </label>
+                  <label className="flex flex-col text-xs font-semibold text-slate-600 justify-center">
+                    <span className="mb-2">Extra</span>
+                    <div className="flex items-center gap-1 bg-slate-100 px-2 py-1.5 rounded border border-slate-300 h-[38px] cursor-pointer hover:bg-slate-200 transition-colors">
+                      <input 
+                        type="checkbox" 
+                        id="noChange"
+                        checked={draftSearchNoChange} 
+                        onChange={e => setDraftSearchNoChange(e.target.checked)}
+                        className="w-4 h-4 text-indigo-600 rounded border-gray-300" 
+                      />
+                      <label htmlFor="noChange" className="text-xs font-medium text-slate-700 cursor-pointer ml-1 select-none whitespace-nowrap">无变化</label>
+                    </div>
+                  </label>
                </div>
                <button 
                   onClick={handleApplySearch}
@@ -451,6 +523,14 @@ export default function App() {
                  >
                    <Bot size={14} />
                    AI Translate Selected
+                 </button>
+                 <button 
+                   disabled={!uploadType}
+                   onClick={handleBatchOverwrite}
+                   className="text-xs bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-1.5 rounded flex items-center gap-1 transition-colors"
+                 >
+                   <FileUp size={14} />
+                   批量覆盖 (Excel)
                  </button>
               </div>
             </div>
