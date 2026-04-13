@@ -75,7 +75,7 @@ export default function App() {
         setItems(parsed.items);
         setUpdates({});
         setSelectedIds([]);
-        setAppliedFilters({ id: '', source: '', target: '', notSource: '', notTarget: '', state: 'All', lengthRatio: 'All', customRatio: '0' });
+        setAppliedFilters({ id: '', source: '', target: '', notSource: '', notTarget: '', state: 'All', lengthRatio: 'All', customRatio: '0', noChange: false });
         setDraftSearchId('');
         setDraftSearchSource('');
         setDraftSearchTarget('');
