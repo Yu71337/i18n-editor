@@ -33,16 +33,21 @@ export async function generateAISuggestion(config: {
     }
 
     // OpenAI and Local LLM (LM Studio) share the same API format
-    const authHeader = provider === 'local_llm' 
-        ? (config.apiKey ? { "Authorization": `Bearer ${config.apiKey}` } : {})
-        : { "Authorization": `Bearer ${config.apiKey}` };
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+    };
+
+    if (provider === 'local_llm') {
+        if (config.apiKey) {
+            headers["Authorization"] = `Bearer ${config.apiKey}`;
+        }
+    } else {
+        headers["Authorization"] = `Bearer ${config.apiKey}`;
+    }
 
     const res = await globalThis.fetch(`${cleanBaseUrl}/chat/completions`, {
         method: "POST",
-        headers: { 
-            "Content-Type": "application/json", 
-            ...authHeader
-        },
+        headers,
         body: JSON.stringify({
             model: config.model,
             messages: [
