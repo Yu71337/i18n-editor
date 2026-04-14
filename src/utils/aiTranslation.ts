@@ -4,7 +4,7 @@ export async function generateAISuggestion(config: {
     apiKey: string;
     baseUrl: string;
     model: string;
-    provider?: 'openai' | 'gemini';
+    provider?: 'openai' | 'gemini' | 'local_llm';
     systemPrompt: string;
 }) {
     const provider = config.provider || 'openai';
@@ -32,12 +32,16 @@ export async function generateAISuggestion(config: {
         return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
-    // Default to OpenAI behavior
+    // OpenAI and Local LLM (LM Studio) share the same API format
+    const authHeader = provider === 'local_llm' 
+        ? (config.apiKey ? { "Authorization": `Bearer ${config.apiKey}` } : {})
+        : { "Authorization": `Bearer ${config.apiKey}` };
+
     const res = await globalThis.fetch(`${cleanBaseUrl}/chat/completions`, {
         method: "POST",
         headers: { 
             "Content-Type": "application/json", 
-            "Authorization": `Bearer ${config.apiKey}` 
+            ...authHeader
         },
         body: JSON.stringify({
             model: config.model,
@@ -50,7 +54,8 @@ export async function generateAISuggestion(config: {
     
     if (!res.ok) {
         const errText = await res.text();
-        throw new Error(`OpenAI API Error (${res.status}): ${errText}`);
+        const providerName = provider === 'local_llm' ? 'Local LLM' : 'OpenAI';
+        throw new Error(`${providerName} API Error (${res.status}): ${errText}`);
     }
     const data = await res.json();
     return data.choices?.[0]?.message?.content || "";

@@ -6,7 +6,7 @@ import type { TransUnit } from '../utils/xliffParser';
 interface Props {
   item: TransUnit;
   targetLang: string;
-  config: { apiKey: string; baseUrl: string; model: string; provider?: 'openai' | 'gemini'; systemPrompt: string };
+  config: { apiKey: string; baseUrl: string; model: string; provider?: 'openai' | 'gemini' | 'local_llm'; systemPrompt: string };
   onUpdate: (target: string, state: string) => void;
   isSelected?: boolean;
   onToggleSelect?: () => void;

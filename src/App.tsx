@@ -3,7 +3,7 @@ import { parseXliff, buildXliff } from './utils/xliffParser';
 import { parseXlsx, buildXlsx, buildExcelForExport, parseExcelForBatchOverwrite } from './utils/xlsxParser';
 import type { TransUnit } from './utils/xliffParser';
 import { TranslationCard } from './components/TranslationCard';
-import { Download, Upload, Settings, Languages, Bot, Search, FileSpreadsheet, FileUp } from 'lucide-react';
+import { Download, Upload, Settings, Languages, Bot, Search, FileSpreadsheet, FileUp, X } from 'lucide-react';
 import { generateAISuggestion } from './utils/aiTranslation';
 
 const defaultPrompt = `You are a translation engine. Translate the following text to exactly: {{targetLang}}.
@@ -27,9 +27,10 @@ export default function App() {
     apiKey: localStorage.getItem('xliff_apikey') || '',
     baseUrl: localStorage.getItem('xliff_baseurl') || 'https://api.openai.com/v1',
     model: localStorage.getItem('xliff_model') || 'gpt-4o-mini',
-    provider: (localStorage.getItem('xliff_provider') as 'openai' | 'gemini') || 'openai',
+    provider: (localStorage.getItem('xliff_provider') as 'openai' | 'gemini' | 'local_llm') || 'openai',
     systemPrompt: localStorage.getItem('xliff_systemPrompt') || defaultPrompt
   });
+  const [tempConfig, setTempConfig] = useState(config);
 
   // Draft Filters
   const [draftSearchId, setDraftSearchId] = useState('');
@@ -41,10 +42,11 @@ export default function App() {
   const [draftSearchLengthRatio, setDraftSearchLengthRatio] = useState('All');
   const [draftSearchCustomRatio, setDraftSearchCustomRatio] = useState('1.5');
   const [draftSearchNoChange, setDraftSearchNoChange] = useState(false);
+  const [draftSearchEmptyOnly, setDraftSearchEmptyOnly] = useState(false);
 
   // Applied Filters
   const [appliedFilters, setAppliedFilters] = useState({
-    id: '', source: '', target: '', notSource: '', notTarget: '', state: 'All', lengthRatio: 'All', customRatio: '0', noChange: false
+    id: '', source: '', target: '', notSource: '', notTarget: '', state: 'All', lengthRatio: 'All', customRatio: '0', noChange: false, emptyOnly: false
   });
 
   // Batch state
@@ -75,7 +77,7 @@ export default function App() {
         setItems(parsed.items);
         setUpdates({});
         setSelectedIds([]);
-        setAppliedFilters({ id: '', source: '', target: '', notSource: '', notTarget: '', state: 'All', lengthRatio: 'All', customRatio: '0', noChange: false });
+        setAppliedFilters({ id: '', source: '', target: '', notSource: '', notTarget: '', state: 'All', lengthRatio: 'All', customRatio: '0', noChange: false, emptyOnly: false });
         setDraftSearchId('');
         setDraftSearchSource('');
         setDraftSearchTarget('');
@@ -85,6 +87,7 @@ export default function App() {
         setDraftSearchLengthRatio('All');
         setDraftSearchCustomRatio('1.5');
         setDraftSearchNoChange(false);
+        setDraftSearchEmptyOnly(false);
     }
 
     if (isXlsx) {
@@ -162,7 +165,8 @@ export default function App() {
       state: draftSearchState,
       lengthRatio: draftSearchLengthRatio,
       customRatio: draftSearchLengthRatio === 'Custom' ? draftSearchCustomRatio : '0',
-      noChange: draftSearchNoChange
+      noChange: draftSearchNoChange,
+      emptyOnly: draftSearchEmptyOnly
     });
   };
 
@@ -189,6 +193,7 @@ export default function App() {
       if (appliedFilters.notTarget && currentTarget.toLowerCase().includes(appliedFilters.notTarget.toLowerCase())) return false;
       
       if (appliedFilters.noChange && item.source !== currentTarget) return false;
+      if (appliedFilters.emptyOnly && currentTarget !== '') return false;
       
       return true;
     });
@@ -329,7 +334,10 @@ export default function App() {
             <FileSpreadsheet size={16} /> 导出 Excel
           </button>
           <button 
-            onClick={() => setShowSettings(true)}
+            onClick={() => {
+              setTempConfig(config);
+              setShowSettings(true);
+            }}
             className="text-slate-500 hover:text-slate-800 p-2"
             title="AI Settings"
           >
@@ -340,46 +348,57 @@ export default function App() {
 
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full shadow-xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full shadow-xl max-h-[90vh] overflow-y-auto relative">
+            <button 
+              onClick={() => setShowSettings(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors p-1"
+              title="Close without saving"
+            >
+              <X size={20} />
+            </button>
             <h2 className="text-lg font-bold mb-4">AI Configuration</h2>
             <div className="flex flex-col gap-4">
               <label className="text-sm font-medium">
                 Provider
-                <select className="w-full mt-1 border border-gray-300 rounded p-2" value={config.provider} onChange={e => setConfig({...config, provider: e.target.value as 'openai'|'gemini'})}>
+                <select className="w-full mt-1 border border-gray-300 rounded p-2" value={tempConfig.provider} onChange={e => setTempConfig({...tempConfig, provider: e.target.value as any})}>
                   <option value="openai">OpenAI (or Compatible)</option>
                   <option value="gemini">Google Gemini natively</option>
+                  <option value="local_llm">本地LLM (LM Studio)</option>
                 </select>
               </label>
               <label className="text-sm font-medium">
                 Base URL
-                <input type="text" className="w-full mt-1 border border-gray-300 rounded p-2 font-mono text-xs" value={config.baseUrl} onChange={e => setConfig({...config, baseUrl: e.target.value})} placeholder="e.g. https://api.openai.com/v1" />
+                <input type="text" className="w-full mt-1 border border-gray-300 rounded p-2 font-mono text-xs" value={tempConfig.baseUrl} onChange={e => setTempConfig({...tempConfig, baseUrl: e.target.value})} placeholder="e.g. https://api.openai.com/v1" />
               </label>
               <label className="text-sm font-medium">
                 Model Name
-                <input type="text" className="w-full mt-1 border border-gray-300 rounded p-2 font-mono text-xs" value={config.model} onChange={e => setConfig({...config, model: e.target.value})} />
+                <input type="text" className="w-full mt-1 border border-gray-300 rounded p-2 font-mono text-xs" value={tempConfig.model} onChange={e => setTempConfig({...tempConfig, model: e.target.value})} />
               </label>
               <label className="text-sm font-medium">
                 API Key
-                <input type="password" placeholder="sk-..." className="w-full mt-1 border border-gray-300 rounded p-2 font-mono text-xs" value={config.apiKey} onChange={e => setConfig({...config, apiKey: e.target.value})} />
+                <input type="password" placeholder={tempConfig.provider === 'local_llm' ? "Optional for Local LLM" : "sk-..."} className="w-full mt-1 border border-gray-300 rounded p-2 font-mono text-xs" value={tempConfig.apiKey} onChange={e => setTempConfig({...tempConfig, apiKey: e.target.value})} />
               </label>
               <label className="text-sm font-medium flex flex-col">
                 System Prompt (Use {"{{targetLang}}"} for language dynamic injection)
                 <textarea 
                   className="w-full mt-1 border border-gray-300 rounded p-2 font-mono text-xs min-h-[150px]" 
-                  value={config.systemPrompt} 
-                  onChange={e => setConfig({...config, systemPrompt: e.target.value})} 
+                  value={tempConfig.systemPrompt} 
+                  onChange={e => setTempConfig({...tempConfig, systemPrompt: e.target.value})} 
                 />
               </label>
             </div>
             <div className="mt-6 flex justify-between">
               <button 
-                onClick={() => setConfig({...config, systemPrompt: defaultPrompt})}
+                onClick={() => setTempConfig({...tempConfig, systemPrompt: defaultPrompt})}
                 className="text-slate-500 hover:text-slate-800 text-sm font-medium px-4 py-2"
               >
                 Reset Prompt
               </button>
               <button 
-                onClick={() => setShowSettings(false)}
+                onClick={() => {
+                  setConfig(tempConfig);
+                  setShowSettings(false);
+                }}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded transition-colors"
               >
                 Save & Close
@@ -433,40 +452,50 @@ export default function App() {
                       <option value="final">final</option>
                     </select>
                  </label>
-                 <label className="flex flex-col flex-1 min-w-[120px] text-xs font-semibold text-slate-600">
-                    Length Ratio
-                    <div className="flex gap-1 mt-1">
-                      <select className="border border-slate-300 rounded p-2 text-sm font-normal flex-1" value={draftSearchLengthRatio} onChange={e => setDraftSearchLengthRatio(e.target.value)}>
-                        <option value="All">All</option>
-                        <option value="< 1.5x">&lt; 1.5x</option>
-                        <option value="1.5x - 2.0x">1.5x - 2.0x</option>
-                        <option value="> 2.0x">&gt; 2.0x</option>
-                        <option value="Custom">Custom (&gt;)...</option>
-                      </select>
-                      {draftSearchLengthRatio === 'Custom' && (
+                  <label className="flex flex-col min-w-[140px] text-xs font-semibold text-slate-600">
+                     Length Ratio
+                     <div className="flex gap-1 mt-1">
+                       <select className="border border-slate-300 rounded p-2 text-sm font-normal w-32" value={draftSearchLengthRatio} onChange={e => setDraftSearchLengthRatio(e.target.value)}>
+                         <option value="All">All</option>
+                         <option value="< 1.5x">&lt; 1.5x</option>
+                         <option value="1.5x - 2.0x">1.5x - 2.0x</option>
+                         <option value="> 2.0x">&gt; 2.0x</option>
+                         <option value="Custom">Custom...</option>
+                       </select>
+                       {draftSearchLengthRatio === 'Custom' && (
+                         <input 
+                           type="number" 
+                           step="0.1" 
+                           className="border border-slate-300 rounded p-2 text-sm font-normal w-14" 
+                           value={draftSearchCustomRatio} 
+                           onChange={e => setDraftSearchCustomRatio(e.target.value)} 
+                         />
+                       )}
+                     </div>
+                   </label>
+                   
+                   <div className="flex items-end gap-2 pb-[1px]">
+                     <div className="flex items-center gap-1 bg-slate-100 px-2 h-[38px] rounded border border-slate-300 cursor-pointer hover:bg-slate-200 transition-colors">
                         <input 
-                          type="number" 
-                          step="0.1" 
-                          className="border border-slate-300 rounded p-2 text-sm font-normal w-16" 
-                          value={draftSearchCustomRatio} 
-                          onChange={e => setDraftSearchCustomRatio(e.target.value)} 
+                          type="checkbox" 
+                          id="noChange"
+                          checked={draftSearchNoChange} 
+                          onChange={e => setDraftSearchNoChange(e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 rounded border-gray-300" 
                         />
-                      )}
-                    </div>
-                  </label>
-                  <label className="flex flex-col text-xs font-semibold text-slate-600 justify-center">
-                    <span className="mb-2">Extra</span>
-                    <div className="flex items-center gap-1 bg-slate-100 px-2 py-1.5 rounded border border-slate-300 h-[38px] cursor-pointer hover:bg-slate-200 transition-colors">
-                      <input 
-                        type="checkbox" 
-                        id="noChange"
-                        checked={draftSearchNoChange} 
-                        onChange={e => setDraftSearchNoChange(e.target.checked)}
-                        className="w-4 h-4 text-indigo-600 rounded border-gray-300" 
-                      />
-                      <label htmlFor="noChange" className="text-xs font-medium text-slate-700 cursor-pointer ml-1 select-none whitespace-nowrap">无变化</label>
-                    </div>
-                  </label>
+                        <label htmlFor="noChange" className="text-xs font-medium text-slate-700 cursor-pointer ml-1 select-none whitespace-nowrap">无变化</label>
+                      </div>
+                      <div className="flex items-center gap-1 bg-slate-100 px-2 h-[38px] rounded border border-slate-300 cursor-pointer hover:bg-slate-200 transition-colors">
+                        <input 
+                          type="checkbox" 
+                          id="emptyOnly"
+                          checked={draftSearchEmptyOnly} 
+                          onChange={e => setDraftSearchEmptyOnly(e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 rounded border-gray-300" 
+                        />
+                        <label htmlFor="emptyOnly" className="text-xs font-medium text-slate-700 cursor-pointer ml-1 select-none whitespace-nowrap">译文为空</label>
+                      </div>
+                   </div>
                </div>
                <button 
                   onClick={handleApplySearch}
