@@ -270,7 +270,6 @@ export default function App() {
     if (config.provider !== 'local_llm' && !config.apiKey) return alert("Configure API key first in Settings.");
     setIsGlobalLoading(true);
     
-    let currentUpdates = { ...updates };
     for (const id of selectedIds) {
       const item = items.find(i => i.id === id);
       if (!item) continue;
