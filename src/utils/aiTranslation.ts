@@ -8,7 +8,7 @@ export async function generateAISuggestion(config: {
     systemPrompt: string;
 }) {
     const provider = config.provider || 'openai';
-    const cleanBaseUrl = config.baseUrl.replace(/\/$/, '');
+    const cleanBaseUrl = (config.baseUrl || '').trim().replace(/\/+$/, '');
 
     if (provider === 'gemini') {
         const url = `${cleanBaseUrl || 'https://generativelanguage.googleapis.com'}/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
@@ -32,7 +32,6 @@ export async function generateAISuggestion(config: {
         return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
-    const cleanBaseUrl = config.baseUrl.trim().replace(/\/+$/, '');
     let finalBaseUrl = cleanBaseUrl;
     
     // For Local LLM (LM Studio), if the user forgets /v1, we append it
