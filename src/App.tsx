@@ -266,7 +266,7 @@ export default function App() {
   };
 
   const handleBatchAI = async () => {
-    if (!config.apiKey) return alert("Configure API key first in Settings.");
+    if (config.provider !== 'local_llm' && !config.apiKey) return alert("Configure API key first in Settings.");
     setIsGlobalLoading(true);
     
     let currentUpdates = { ...updates };
@@ -369,6 +369,11 @@ export default function App() {
               <label className="text-sm font-medium">
                 Base URL
                 <input type="text" className="w-full mt-1 border border-gray-300 rounded p-2 font-mono text-xs" value={tempConfig.baseUrl} onChange={e => setTempConfig({...tempConfig, baseUrl: e.target.value})} placeholder="e.g. https://api.openai.com/v1" />
+                {tempConfig.provider === 'local_llm' && (
+                  <p className="text-[10px] text-amber-600 mt-1">
+                    Tip: For LM Studio, use <b>http://localhost:1234/v1</b> and ensure <b>CORS</b> is enabled in LM Studio server settings.
+                  </p>
+                )}
               </label>
               <label className="text-sm font-medium">
                 Model Name

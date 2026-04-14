@@ -35,7 +35,7 @@ export function TranslationCard({ item, targetLang, config, onUpdate, isSelected
   };
 
   const handleAskAI = async () => {
-    if (!config.apiKey) {
+    if (config.provider !== 'local_llm' && !config.apiKey) {
       setAiError('Please configure API keys first.');
       return;
     }

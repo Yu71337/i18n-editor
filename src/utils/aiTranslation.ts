@@ -32,24 +32,23 @@ export async function generateAISuggestion(config: {
         return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
-    // OpenAI and Local LLM (LM Studio) share the same API format
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-
-    if (provider === 'local_llm') {
-        if (config.apiKey) {
-            headers["Authorization"] = `Bearer ${config.apiKey}`;
-        }
-    } else {
-        headers["Authorization"] = `Bearer ${config.apiKey}`;
+    const cleanBaseUrl = config.baseUrl.trim().replace(/\/+$/, '');
+    let finalBaseUrl = cleanBaseUrl;
+    
+    // For Local LLM (LM Studio), if the user forgets /v1, we append it
+    if (provider === 'local_llm' && !cleanBaseUrl.endsWith('/v1')) {
+        finalBaseUrl = `${cleanBaseUrl}/v1`;
     }
 
-    const res = await globalThis.fetch(`${cleanBaseUrl}/chat/completions`, {
+    const res = await globalThis.fetch(`${finalBaseUrl}/chat/completions`, {
         method: "POST",
-        headers,
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            ...(config.apiKey ? { "Authorization": `Bearer ${config.apiKey}` } : {})
+        },
         body: JSON.stringify({
-            model: config.model,
+            model: config.model || "local-model",
             messages: [
                 { role: "system", content: config.systemPrompt },
                 { role: "user", content: config.sourceText }
