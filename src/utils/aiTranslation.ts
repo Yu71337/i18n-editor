@@ -39,6 +39,17 @@ export async function generateAISuggestion(config: {
         finalBaseUrl = `${cleanBaseUrl}/v1`;
     }
 
+    const payload = {
+        model: config.model || "local-model",
+        messages: [
+            { role: "system", content: config.systemPrompt || "" },
+            { role: "user", content: config.sourceText || "" }
+        ]
+    };
+
+    console.log("[AI Request] URL:", `${finalBaseUrl}/chat/completions`);
+    console.log("[AI Request] Payload:", payload);
+
     const res = await globalThis.fetch(`${finalBaseUrl}/chat/completions`, {
         method: "POST",
         headers: {
@@ -46,17 +57,12 @@ export async function generateAISuggestion(config: {
             "Accept": "application/json",
             ...(config.apiKey ? { "Authorization": `Bearer ${config.apiKey}` } : {})
         },
-        body: JSON.stringify({
-            model: config.model || "local-model",
-            messages: [
-                { role: "system", content: config.systemPrompt },
-                { role: "user", content: config.sourceText }
-            ]
-        })
+        body: JSON.stringify(payload)
     });
     
     if (!res.ok) {
         const errText = await res.text();
+        console.error("[AI Response ERROR]", res.status, errText);
         const providerName = provider === 'local_llm' ? 'Local LLM' : 'OpenAI';
         throw new Error(`${providerName} API Error (${res.status}): ${errText}`);
     }
