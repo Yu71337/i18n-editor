@@ -20,6 +20,7 @@ export default function App() {
   const [targetLang, setTargetLang] = useState('en');
   const [items, setItems] = useState<TransUnit[]>([]);
   const [updates, setUpdates] = useState<Record<string, {target: string, state: string}>>({});
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, string>>({});
   
   // Settings
   const [showSettings, setShowSettings] = useState(false);
@@ -284,8 +285,7 @@ export default function App() {
           provider: config.provider,
           systemPrompt: config.systemPrompt.replace('{{targetLang}}', targetLang)
         });
-        currentUpdates = { ...currentUpdates, [id]: { target: res, state: 'translated' } };
-        setUpdates({ ...currentUpdates });
+        setAiSuggestions(prev => ({ ...prev, [id]: res }));
       } catch (e: any) {
         console.error(`AI failure on ${id}: ${e.message}`);
       }
@@ -586,7 +586,18 @@ export default function App() {
                    onToggleSelect={() => handleToggleSelect(item.id)}
                    targetLang={targetLang}
                    config={config}
-                   onUpdate={(target, state) => handleUpdate(item.id, target, state)} 
+                   aiSuggestion={aiSuggestions[item.id]}
+                   onAiSuggestionChange={(id, suggestion) => setAiSuggestions(prev => ({ ...prev, [id]: suggestion }))}
+                   onUpdate={(target, state) => {
+                     handleUpdate(item.id, target, state);
+                     if (aiSuggestions[item.id]) {
+                       setAiSuggestions(prev => {
+                         const next = { ...prev };
+                         delete next[item.id];
+                         return next;
+                       });
+                     }
+                   }} 
                    onGlobalLoadingChange={(loading) => setIsGlobalLoading(loading)}
                  />
                ))}

@@ -11,11 +11,23 @@ interface Props {
   isSelected?: boolean;
   onToggleSelect?: () => void;
   onGlobalLoadingChange?: (loading: boolean) => void;
+  aiSuggestion?: string;
+  onAiSuggestionChange?: (id: string, suggestion: string) => void;
 }
 
 import { useEffect } from 'react';
 
-export function TranslationCard({ item, targetLang, config, onUpdate, isSelected = false, onToggleSelect, onGlobalLoadingChange }: Props) {
+export function TranslationCard({ 
+  item, 
+  targetLang, 
+  config, 
+  onUpdate, 
+  isSelected = false, 
+  onToggleSelect, 
+  onGlobalLoadingChange,
+  aiSuggestion = '',
+  onAiSuggestionChange
+}: Props) {
   const [localTarget, setLocalTarget] = useState(item.target);
   const [localState, setLocalState] = useState(item.state);
 
@@ -25,7 +37,6 @@ export function TranslationCard({ item, targetLang, config, onUpdate, isSelected
   }, [item.target, item.state]);
   
   const [loadingAI, setLoadingAI] = useState(false);
-  const [aiSuggestion, setAiSuggestion] = useState('');
   const [aiError, setAiError] = useState('');
 
   const handleBlur = () => {
@@ -52,7 +63,9 @@ export function TranslationCard({ item, targetLang, config, onUpdate, isSelected
         provider: config.provider,
         systemPrompt: config.systemPrompt.replace('{{targetLang}}', targetLang)
       });
-      setAiSuggestion(res);
+      if (onAiSuggestionChange) {
+        onAiSuggestionChange(item.id, res);
+      }
     } catch (e: any) {
       setAiError(e.message);
     } finally {
@@ -150,7 +163,6 @@ export function TranslationCard({ item, targetLang, config, onUpdate, isSelected
                  setLocalTarget(aiSuggestion);
                  setLocalState(newState);
                  onUpdate(aiSuggestion, newState);
-                 setAiSuggestion('');
                }}
              >
                <Check size={14} /> Apply Translation
